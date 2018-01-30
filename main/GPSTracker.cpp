@@ -13,7 +13,9 @@
 
 #define BME280_ADR 0x76
 
-GPSTracker::GPSTracker() : _display(0), _bmeok(false) {
+#define SEALEVELPRESSURE_HPA 1013.25f
+
+GPSTracker::GPSTracker() : _display(0), _bmeok(false), _seaLevel(SEALEVELPRESSURE_HPA) {
 }
 
 void GPSTracker::cb_task(void *parm)
@@ -30,7 +32,6 @@ void GPSTracker::run() {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         tick();
     }
-    _display->end();
 }
 
 bool GPSTracker::start() {
@@ -39,15 +40,16 @@ bool GPSTracker::start() {
 }
 
 bool GPSTracker::init_display()  {
-    _display = new Adafruit_SSD1306(0x3c, SDA, SCL);
-    return _display->init();
+    _display = new Adafruit_SSD1306(-1);
+    Wire.setBus(1);
+    Wire.begin(SDA, SCL);
+    _display->begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDRESS, false);
+    return true;
 }
 
 bool GPSTracker::init_bme280()  {
-    TwoWire wire1(0);
-    wire1.begin(SDA, SCL);
 
-    if (_bme.begin(BME280_ADR,&wire1)) {
+    if (_bme.begin(BME280_ADR)) {
         printf("BME280 sensor found!\n");
         _bmeok=true;
         return true;
@@ -62,45 +64,51 @@ bool GPSTracker::init_gps()  {
 }
 
 void GPSTracker::display_altitude(float alt) {
-    printf("Display: some text\n");
-    _display->clear();
+    if (!_display) return;
+
+    _display->clearDisplay();
     // text display tests
-    _display->setFont("ArialMT_Plain_24");
-    _display->setColor(WHITE);
-    _display->drawString(0,0,"Sming Framework");
+    _display->setTextSize(1);
+    _display->setTextColor(WHITE);
+    _display->setCursor(0,0);
+    _display->println("Sming Framework");
+    _display->println("");
     //----
-    _display->drawString(0,28,String("altitude = ") + alt + " m");
+    _display->println(String("altitude = ") + alt + " m");
     _display->display();
 }
 
 void GPSTracker::display_info(int row, const char* info) {
     // text display tests
-    _display->setFont("ArialMT_Plain_24");
-    _display->setColor(WHITE);
-    _display->drawString(0,row*26,info);
+    _display->setTextSize(1);
+    _display->setTextColor(WHITE);
+    _display->setCursor(0,row*20);
+    _display->println(info);
     //----
     _display->display();
 }
-
-#define SEALEVELPRESSURE_HPA (1013.25)
-float _seaLevel=SEALEVELPRESSURE_HPA;
 
 void GPSTracker::tick() {
     printf("tick this=%p _display=%p _bmeok=%d\n", this, _display, _bmeok);
     if (!_display) {
         init_display();
     } else if (!_bmeok) {
-        _display->clear();
-        display_info(0, "Display works");
-        display_info(1, "Try to init bme280.");
+        if (_display) {
+            _display->clearDisplay();
+            display_info(0, "Display works");
+            display_info(1, "Try to init bme280.");
+        }
         init_bme280();
-        if (_bmeok)
-            display_info(2, "   ok");
-        else
-            display_info(2, "   failed");
+        if (_display) {
+            if (_bmeok)
+                display_info(2, "   ok");
+            else
+                display_info(2, "   failed");
+        }
+        _seaLevel=SEALEVELPRESSURE_HPA;
     } else {
-//        float v=_bme.readAltitude(_seaLevel);
-//        Serial.printf("v=%f\n", v);
-//        display_altitude(v);
+        float v=_bme.readAltitude(_seaLevel);
+        printf("h=%f _seaLevel=%f\n", v, _seaLevel);
+        display_altitude(v);
     }
 }
