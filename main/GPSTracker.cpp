@@ -36,13 +36,13 @@ void GPSTracker::run() {
 
 bool GPSTracker::start() {
     printf("%s this=%p\n", __FUNCTION__, this);
+    Wire.setBus(1);
+    Wire.begin(SDA, SCL);
     return pdPASS==xTaskCreate(&cb_task, "GPSTracker Task", 2048, this, 5, NULL);
 }
 
 bool GPSTracker::init_display()  {
     _display = new Adafruit_SSD1306(-1);
-    Wire.setBus(1);
-    Wire.begin(SDA, SCL);
     _display->begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDRESS, false);
     return true;
 }
@@ -89,7 +89,7 @@ void GPSTracker::display_info(int row, const char* info) {
 }
 
 void GPSTracker::tick() {
-    printf("tick this=%p _display=%p _bmeok=%d\n", this, _display, _bmeok);
+    printf("tick\n");
     if (!_display) {
         init_display();
     } else if (!_bmeok) {
