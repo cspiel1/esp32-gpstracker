@@ -18,7 +18,12 @@ class GPSTracker {
 		void display_info(int row, const char* info);
 		void tick();
 		static void cb_task(void *parm);
+		static void cb_otatask(void *parm);
+		static void cb_uarttask(void *parm);
 		void run();
+		void ota();
+		void uart();
+		void init_wifi();
 
 	public:
 		GPSTracker();
