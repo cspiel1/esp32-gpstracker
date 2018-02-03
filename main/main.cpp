@@ -21,7 +21,7 @@ extern "C" void app_main()
     printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
             (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
-    GPSTracker tracker;
-    tracker.start();
+    GPSTracker* tracker = new GPSTracker();
+    tracker->start();
 }
 

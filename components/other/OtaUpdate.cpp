@@ -12,8 +12,6 @@
 #include <string.h>
 #include <sys/types.h>          /* See NOTES */
 #include <sys/socket.h>
-#include <nvs.h>
-#include <nvs_flash.h>
 
 OtaUpdate::OtaUpdate(const char* serverip, int serverport): _serverip(serverip),
 	_serverport(serverport), _filename(0), socket_id(-1), binary_file_length(0)	{
@@ -228,17 +226,6 @@ void OtaUpdate::run_ota() {
 }
 
 void OtaUpdate::start() {
-    // Initialize NVS.
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
-        // OTA app partition table has a smaller NVS partition size than the non-OTA
-        // partition table. This size mismatch may cause NVS initialization to fail.
-        // If this happens, we erase NVS partition and initialize NVS again.
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK( err );
-
     xTaskCreate(&OtaUpdate::ota_task, "ota_task", 8192, this, 5, NULL);
 }
 

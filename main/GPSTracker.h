@@ -24,6 +24,7 @@ class GPSTracker {
 		void ota();
 		void uart();
 		void init_wifi();
+		void wifi_scan();
 
 	public:
 		GPSTracker();

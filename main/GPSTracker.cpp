@@ -4,6 +4,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <driver/uart.h>
+#include <nvs.h>
+#include <nvs_flash.h>
+#include <soc/soc.h>
+#include <soc/rtc_cntl_reg.h>
+#include <OtaUpdate.h>
 
 #undef swap
 #include <Wire.h>
@@ -11,7 +16,7 @@
 
 #include <stdio.h>
 
-#define SSID "OpenWrt-chris"
+#define MYSSID "OpenWrt-chris"
 #define WIFI_PWD "zippezappe538"
 
 #define SDA     18
@@ -22,6 +27,7 @@
 #define SEALEVELPRESSURE_HPA 1013.25f
 
 GPSTracker::GPSTracker() : _display(0), _bmeok(false), _seaLevel(SEALEVELPRESSURE_HPA) {
+    _seaLevel=SEALEVELPRESSURE_HPA;
 }
 
 void GPSTracker::cb_task(void *parm)
@@ -54,13 +60,16 @@ void GPSTracker::run() {
 void GPSTracker::ota() {
     printf("%s\n", __FUNCTION__);
     init_wifi();
+    OtaUpdate* otaupdate= new OtaUpdate("37.120.186.210", 80);
+    otaupdate->setFileName("share/gpstracker.elf");
+    otaupdate->start();
 }
 
 #define TXD  (GPIO_NUM_1)
 #define RXD  (GPIO_NUM_3)
 #define RTS  (UART_PIN_NO_CHANGE)
 #define CTS  (UART_PIN_NO_CHANGE)
-#define BUF_SIZE (1024)
+#define BUF_SIZE (128)
 
 void GPSTracker::uart() {
     /* Configure parameters of an UART driver,
@@ -79,55 +88,107 @@ void GPSTracker::uart() {
     uart_driver_install(UART_NUM_0, BUF_SIZE * 2, 0, 0, NULL, 0);
 
     // Configure a temporary buffer for the incoming data
+    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     uint8_t *data = (uint8_t *) malloc(BUF_SIZE);
+    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
 
-    String line;
+    char line[BUF_SIZE+1];
+    line[0]=0;
     while (1) {
         // Read data from the UART
         int len = uart_read_bytes(UART_NUM_0, data, BUF_SIZE, 20 / portTICK_RATE_MS);
-        data[len]=0;
-        line = line + (char*) data;
-        if (memchr(data, '\n', len)) {
-            if (line=="ota") {
-                ota();
-            } else {
-                printf("Unkown command: |%s|\n", line.c_str());
+        if (len) {
+            data[len]=0;
+            if (strlen(line)+strlen((char*)data)>BUF_SIZE)
+                line[0]=0;
+            strcat(line, (char*)data);
+            if (memchr(data, '\n', len)) {
+                len=strlen(line);
+                if (len>=2)
+                    line[len-2]=0;
+                if (!strcmp(line,"ota")) {
+                    ota();
+                } else {
+                    printf("Unkown command: |%s|\n", line);
+                }
+                line[0]=0;
             }
-            line="";
+        }
+        delay(1);
+    }
+}
+
+void GPSTracker::wifi_scan() {
+    int n = WiFi.scanNetworks();
+    printf("scan done\n");
+    if (n == 0) {
+        printf("no networks found\n");
+    } else {
+        printf("n=%d\n", n);
+        for (int i = 0; i < n; ++i) {
+            // Print SSID and RSSI for each network found
+            printf("%d : %s %d %s\n", i+1, WiFi.SSID(i).c_str(), WiFi.RSSI(i),
+                    WiFi.encryptionType(i) == WIFI_AUTH_OPEN?" ":"*");
         }
     }
 }
 
 void GPSTracker::init_wifi() {
-    printf("%s\n", __FUNCTION__);
-    WiFi.begin(SSID, WIFI_PWD);
+    // Initialize NVS.
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+        // OTA app partition table has a smaller NVS partition size than the non-OTA
+        // partition table. This size mismatch may cause NVS initialization to fail.
+        // If this happens, we erase NVS partition and initialize NVS again.
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK( err );
+
+//    printf("%s %d\n", __FUNCTION__, __LINE__);
+//    WiFi.mode(WIFI_STA);
+//    printf("%s %d\n", __FUNCTION__, __LINE__);
+//    WiFi.disconnect();
+//    printf("%s %d\n", __FUNCTION__, __LINE__);
+//    wifi_scan();
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
+    printf("%s %d\n", __FUNCTION__, __LINE__);
+    WiFi.begin(MYSSID, WIFI_PWD);
+    printf("%s %d\n", __FUNCTION__, __LINE__);
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 1); //enable brownout detector
     while (WiFi.status() != WL_CONNECTED) {
+        printf("%s %d\n", __FUNCTION__, __LINE__);
         delay(500);
-        Serial.print(".");
+        printf(".");
+        fflush(stdout);
     }
 
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
+    printf("\n");
+    printf("WiFi connected\n");
+    printf("IP address: %s\n", WiFi.localIP().toString().c_str());
 }
 
 bool GPSTracker::start() {
     printf("%s this=%p\n", __FUNCTION__, this);
-    xTaskCreate(&cb_uarttask, "UART Task", 2048, this, 5, NULL);
+    xTaskCreate(&cb_uarttask, "UART Task", 8192, this, 5, NULL);
     Wire.setBus(1);
     Wire.begin(SDA, SCL);
     return pdPASS==xTaskCreate(&cb_task, "GPSTracker Task", 2048, this, 5, NULL);
+    return true;
 }
 
 bool GPSTracker::init_display()  {
+    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     _display = new Adafruit_SSD1306(-1);
+    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     _display->begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDRESS, false);
+    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     return true;
 }
 
 bool GPSTracker::init_bme280()  {
 
+    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     if (_bme.begin(BME280_ADR)) {
         printf("BME280 sensor found!\n");
         _bmeok=true;
@@ -170,8 +231,10 @@ void GPSTracker::display_info(int row, const char* info) {
 void GPSTracker::tick() {
     printf("tick\n");
     if (!_display) {
+        printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
         init_display();
     } else if (!_bmeok) {
+        printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
         if (_display) {
             _display->clearDisplay();
             display_info(0, "Display works");
@@ -184,8 +247,8 @@ void GPSTracker::tick() {
             else
                 display_info(2, "   failed");
         }
-    } else {
         _seaLevel=SEALEVELPRESSURE_HPA;
+    } else {
         float v=_bme.readAltitude(_seaLevel);
         printf("h=%f _seaLevel=%f\n", v, _seaLevel);
         display_altitude(v);
