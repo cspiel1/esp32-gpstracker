@@ -17,8 +17,10 @@ Features:
 - TODO: BLE for GPS data transfer to host
 
 Pins:
-- I2C SDA     GPIO18
--     SCL     GPIO19
+```
+  I2C SDA     GPIO18
+      SCL     GPIO19
+```
 
 Usage:
 - Edit user.mk and set OTASERVER and OTAFILE adequately for the ota update.
