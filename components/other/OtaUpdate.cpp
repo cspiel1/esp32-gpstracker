@@ -116,6 +116,14 @@ bool OtaUpdate::connect_to_http_server() {
 void OtaUpdate::run_ota() {
 
     ESP_LOGI(TAG, "Starting OTA example...");
+    if (!_filename) {
+        ESP_LOGW(TAG, "Filename was not set. Use setFileName()!");
+        return;
+    }
+    if (!_serverip) {
+        ESP_LOGW(TAG, "Server address was not set.");
+        return;
+    }
 
     const esp_partition_t *configured = esp_ota_get_boot_partition();
     const esp_partition_t *running = esp_ota_get_running_partition();
@@ -140,9 +148,9 @@ void OtaUpdate::run_ota() {
 
     /*send GET request to http server*/
     const char *GET_FORMAT =
-        "GET %s HTTP/1.0\r\n"
-        "Host: %s:%s\r\n"
-        "User-Agent: esp-idf/1.0 esp32\r\n\r\n";
+        "GET /%s HTTP/1.1\r\n"
+        "Host: %s:%d\r\n"
+        "User-Agent: esp-idf/1.1 esp32\r\n\r\n";
 
     char *http_request = NULL;
     int get_len = asprintf(&http_request, GET_FORMAT, _filename, _serverip, _serverport);

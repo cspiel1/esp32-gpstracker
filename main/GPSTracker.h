@@ -10,6 +10,7 @@ class GPSTracker {
 		Adafruit_BME280 _bme;
 		bool _bmeok;
 		float _seaLevel;
+		bool _run;
 
 		bool init_display();
 		bool init_bme280();

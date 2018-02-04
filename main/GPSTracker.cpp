@@ -26,7 +26,8 @@
 
 #define SEALEVELPRESSURE_HPA 1013.25f
 
-GPSTracker::GPSTracker() : _display(0), _bmeok(false), _seaLevel(SEALEVELPRESSURE_HPA) {
+GPSTracker::GPSTracker() : _display(0), _bmeok(false), _seaLevel(SEALEVELPRESSURE_HPA),
+    _run(false) {
     _seaLevel=SEALEVELPRESSURE_HPA;
 }
 
@@ -51,17 +52,19 @@ void GPSTracker::cb_uarttask(void *parm)
 void GPSTracker::run() {
     _display=0;
     _bmeok=false;
-    while (1) {
+    while (true) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
-        tick();
+        if (_run)
+            tick();
     }
 }
 
 void GPSTracker::ota() {
     printf("%s\n", __FUNCTION__);
+    _run=false;
     init_wifi();
     OtaUpdate* otaupdate= new OtaUpdate("37.120.186.210", 80);
-    otaupdate->setFileName("share/gpstracker.elf");
+    otaupdate->setFileName("share/gpstracker.bin");
     otaupdate->start();
 }
 
@@ -94,7 +97,7 @@ void GPSTracker::uart() {
 
     char line[BUF_SIZE+1];
     line[0]=0;
-    while (1) {
+    while (true) {
         // Read data from the UART
         int len = uart_read_bytes(UART_NUM_0, data, BUF_SIZE, 20 / portTICK_RATE_MS);
         if (len) {
@@ -170,11 +173,11 @@ void GPSTracker::init_wifi() {
 
 bool GPSTracker::start() {
     printf("%s this=%p\n", __FUNCTION__, this);
+    _run=true;
     xTaskCreate(&cb_uarttask, "UART Task", 8192, this, 5, NULL);
     Wire.setBus(1);
     Wire.begin(SDA, SCL);
     return pdPASS==xTaskCreate(&cb_task, "GPSTracker Task", 2048, this, 5, NULL);
-    return true;
 }
 
 bool GPSTracker::init_display()  {
