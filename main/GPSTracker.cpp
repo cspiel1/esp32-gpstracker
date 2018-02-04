@@ -46,6 +46,12 @@ void GPSTracker::cb_uarttask(void *parm)
     self->uart();
 }
 
+void GPSTracker::cb_gpstask(void *parm)
+{
+    GPSTracker* self=static_cast<GPSTracker*>(parm);
+    self->gps();
+}
+
 void GPSTracker::run() {
     _display=0;
     _bmeok=false;
@@ -116,6 +122,52 @@ void GPSTracker::uart() {
     }
 }
 
+#define TXD2  (GPIO_NUM_17)
+#define RXD2  (GPIO_NUM_16)
+#define BUF_SIZE2 (256)
+
+void GPSTracker::gps() {
+    /* Configure parameters of an UART driver,
+     * communication pins and install the driver */
+    uart_config_t uart_config = {
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .rx_flow_ctrl_thresh = 0,
+        .use_ref_tick = false
+    };
+    uart_param_config(UART_NUM_1, &uart_config);
+    uart_set_pin(UART_NUM_1, TXD2, RXD2, RTS, CTS);
+    uart_driver_install(UART_NUM_1, BUF_SIZE2 * 2, 0, 0, NULL, 0);
+
+    // Configure a temporary buffer for the incoming data
+    uint8_t *data = (uint8_t *) malloc(BUF_SIZE2);
+
+    char line[BUF_SIZE2+1];
+    line[0]=0;
+    while (true) {
+        // Read data from the UART
+        if (!_run) {
+            delay(1000);
+            continue;
+        }
+        int len = uart_read_bytes(UART_NUM_1, data, BUF_SIZE2, 20 / portTICK_RATE_MS);
+        if (len) {
+            data[len]=0;
+            if (strlen(line)+strlen((char*)data)>BUF_SIZE2)
+                line[0]=0;
+            strcat(line, (char*)data);
+            if (memchr(data, '\n', len)) {
+                printf("GPS: |%s|\n", line);
+                line[0]=0;
+            }
+        }
+        delay(1);
+    }
+}
+
 void GPSTracker::wifi_scan() {
     int n = WiFi.scanNetworks();
     printf("scan done\n");
@@ -163,7 +215,10 @@ void GPSTracker::init_wifi() {
 bool GPSTracker::start() {
     printf("%s this=%p\n", __FUNCTION__, this);
     _run=true;
+
     xTaskCreate(&cb_uarttask, "UART Task", 8192, this, 5, NULL);
+    xTaskCreate(&cb_gpstask, "GPS Task", 8192, this, 5, NULL);
+
     Wire.setBus(1);
     Wire.begin(SDA, SCL);
     return pdPASS==xTaskCreate(&cb_task, "GPSTracker Task", 2048, this, 5, NULL);

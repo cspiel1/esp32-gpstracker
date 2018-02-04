@@ -8,3 +8,5 @@ PROJECT_NAME := gpstracker
 include user.mk
 include $(IDF_PATH)/make/project.mk
 
+deploy:	$(APP_BIN)
+	scp build/gpstracker.bin $(SERVERPATH)

@@ -18,14 +18,18 @@ class GPSTracker {
 		void display_altitude(float alt);
 		void display_info(int row, const char* info);
 		void tick();
+		void init_wifi();
+		void wifi_scan();
+
 		static void cb_task(void *parm);
 		static void cb_otatask(void *parm);
 		static void cb_uarttask(void *parm);
+		static void cb_gpstask(void *parm);
+
 		void run();
 		void ota();
 		void uart();
-		void init_wifi();
-		void wifi_scan();
+		void gps();
 
 	public:
 		GPSTracker();

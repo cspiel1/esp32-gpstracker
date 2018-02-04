@@ -18,13 +18,18 @@ Features:
 
 Pins:
 ```
-  I2C SDA     GPIO18
+  I2C
+      SDA     GPIO18
       SCL     GPIO19
+
+  GPS NEO-6M  esp32
+      RxD     TxD - GPIO17
+      TxD     RxD - GPIO16
 ```
 
 Usage:
-- Edit user.mk and set OTASERVER, OTAFILE, MYSSID, WIFI_PWD adequately for the
-    ota update.
+- Edit user.mk and set OTASERVER, OTAFILE, MYSSID, WIFI_PWD, SERVERPATH
+    adequately for the ota update.
 - Build and flash the project by calling:
 
 $ make
@@ -32,6 +37,9 @@ $ make
 $ make flash
 
 - Prepair your websever and upload the .bin file from your build directory.
+
+$ make deploy
+
 - make monitor did not work, so I added the serialpy.sh script. Call it:
 
 $ ./serialpy.sh
