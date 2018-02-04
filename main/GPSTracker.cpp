@@ -88,9 +88,7 @@ void GPSTracker::uart() {
     uart_driver_install(UART_NUM_0, BUF_SIZE * 2, 0, 0, NULL, 0);
 
     // Configure a temporary buffer for the incoming data
-    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     uint8_t *data = (uint8_t *) malloc(BUF_SIZE);
-    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
 
     char line[BUF_SIZE+1];
     line[0]=0;
@@ -145,19 +143,13 @@ void GPSTracker::init_wifi() {
     }
     ESP_ERROR_CHECK( err );
 
-//    printf("%s %d\n", __FUNCTION__, __LINE__);
-//    WiFi.mode(WIFI_STA);
-//    printf("%s %d\n", __FUNCTION__, __LINE__);
-//    WiFi.disconnect();
-//    printf("%s %d\n", __FUNCTION__, __LINE__);
-//    wifi_scan();
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
-    printf("%s %d\n", __FUNCTION__, __LINE__);
+//    WiFi.mode(WIFI_STA);
+//    WiFi.disconnect();
+//    wifi_scan();
     WiFi.begin(MYSSID, WIFI_PWD);
-    printf("%s %d\n", __FUNCTION__, __LINE__);
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 1); //enable brownout detector
     while (WiFi.status() != WL_CONNECTED) {
-        printf("%s %d\n", __FUNCTION__, __LINE__);
         delay(500);
         printf(".");
         fflush(stdout);
@@ -178,17 +170,13 @@ bool GPSTracker::start() {
 }
 
 bool GPSTracker::init_display()  {
-    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     _display = new Adafruit_SSD1306(-1);
-    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     _display->begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDRESS, false);
-    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     return true;
 }
 
 bool GPSTracker::init_bme280()  {
 
-    printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
     if (_bme.begin(BME280_ADR)) {
         printf("BME280 sensor found!\n");
         _bmeok=true;
@@ -231,10 +219,8 @@ void GPSTracker::display_info(int row, const char* info) {
 void GPSTracker::tick() {
     printf("tick\n");
     if (!_display) {
-        printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
         init_display();
     } else if (!_bmeok) {
-        printf("%s %d\n", __PRETTY_FUNCTION__, __LINE__);
         if (_display) {
             _display->clearDisplay();
             display_info(0, "Display works");
