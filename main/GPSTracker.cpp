@@ -16,9 +16,6 @@
 
 #include <stdio.h>
 
-#define MYSSID "OpenWrt-chris"
-#define WIFI_PWD "zippezappe538"
-
 #define SDA     18
 #define SCL     19
 

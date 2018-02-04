@@ -1,1 +1,2 @@
-CPPFLAGS = -D OTASERVER=\"your.server.com\" -D OTAFILE=\"your_esp32.bin\"
+CPPFLAGS = -D OTASERVER=\"my.otaserver.org\" -D OTAFILE=\"myotafile.bin\" \
+		   -D MYSSID=\"myssid\" -D WIFI_PWD=\"wifipwd\"
