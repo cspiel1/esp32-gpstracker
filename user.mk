@@ -1,1 +1,1 @@
-CPPFLAGS=-DOTASERVER=your.server.com -DOTAFILE=your_esp32.bin
+CPPFLAGS = -D OTASERVER=\"your.server.com\" -D OTAFILE=\"your_esp32.bin\"

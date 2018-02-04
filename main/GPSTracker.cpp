@@ -63,8 +63,8 @@ void GPSTracker::ota() {
     printf("%s\n", __FUNCTION__);
     _run=false;
     init_wifi();
-    OtaUpdate* otaupdate= new OtaUpdate("37.120.186.210", 80);
-    otaupdate->setFileName("share/gpstracker.bin");
+    OtaUpdate* otaupdate= new OtaUpdate(OTASERVER, 80);
+    otaupdate->setFileName(OTAFILE);
     otaupdate->start();
 }
 
