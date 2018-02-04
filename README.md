@@ -23,11 +23,14 @@ I2C SDA		GPIO18
 Usage:
 - Edit user.mk and set OTASERVER and OTAFILE adequately for the ota update.
 - Build and flash the project by calling:
+
 $ make
+
 $ make flash
 
 - Prepair your websever and upload the .bin file from your build directory.
 - make monitor did not work, so I added the serialpy.sh script. Call it:
+
 $ ./serialpy.sh
 
 - Now you may start the upgrade by typing "ota" then press Enter!
