@@ -23,7 +23,8 @@ Pins:
 ```
 
 Usage:
-- Edit user.mk and set OTASERVER and OTAFILE adequately for the ota update.
+- Edit user.mk and set OTASERVER, OTAFILE, MYSSID, WIFI_PWD adequately for the
+    ota update.
 - Build and flash the project by calling:
 
 $ make
