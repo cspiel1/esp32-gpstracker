@@ -8,6 +8,7 @@
 #include <nvs_flash.h>
 #include <soc/soc.h>
 #include <soc/rtc_cntl_reg.h>
+#include <esp_log.h>
 #include <OtaUpdate.h>
 
 #undef swap
@@ -125,6 +126,144 @@ void GPSTracker::uart() {
 #define TXD2  (GPIO_NUM_17)
 #define RXD2  (GPIO_NUM_16)
 #define BUF_SIZE2 (256)
+static const char *TAG = "GPSTracker";
+
+char* GPSTracker::scan(const char* line, char& c) {
+    if (!line) {
+        c=0;
+        return 0;
+    }
+    c=line[0];
+    char* r=strchr(line, ',');
+    r++;
+    return r;
+}
+
+char* GPSTracker::scan(const char* line, int& i) {
+    if (!line) {
+        i=0;
+        return 0;
+    }
+    i=atoi(line);
+    char* r=strchr(line, ',');
+    r++;
+    return r;
+}
+
+char* GPSTracker::scan(const char* line, float& f) {
+    if (!line) {
+        f=0;
+        return 0;
+    }
+    f=atof(line);
+    char* r=strchr(line, ',');
+    r++;
+    return r;
+}
+
+char* GPSTracker::scan(const char* line, double& d) {
+    if (!line) {
+        d=0;
+        return 0;
+    }
+    d=atol(line);
+    char* r=strchr(line, ',');
+    r++;
+    return r;
+}
+
+char* GPSTracker::scan(const char* line, unsigned int& u) {
+    if (!line) {
+        u=0;
+        return 0;
+    }
+    u=(unsigned int) atoi(line);
+    char* r=strchr(line, ',');
+    r++;
+    return r;
+}
+
+void GPSTracker::process_gps(const char* line) {
+    if (strlen(line)<=6) {
+        ESP_LOGW(TAG, "GPS line is to short. |%s|", line);
+        return;
+    }
+    const char* b=line+7;
+    char* e=strchr(line, '*');
+    if (!e) {
+        ESP_LOGW(TAG, "GPS line: No * found. |%s|", line);
+        return;
+    }
+    // TODO: add crc check
+
+    ESP_LOGI(TAG, "Got: %s", line);
+
+    // GNSS DOP and Active Satellites
+    if (!strncmp(line, "$GPGSA", 6)) {
+        char smode;
+        int fs;
+        int s[12];
+        float pdop, hdop, vdop;
+        if (b) b=scan(b, smode);
+        if (b) b=scan(b, fs);
+        int i=0;
+        while (b) {
+            if (i>11) break;
+            b=scan(b, s[i]);
+            i++;
+        }
+        if (b) b=scan(b, pdop);
+        if (b) b=scan(b, hdop);
+        if (b) b=scan(b, vdop);
+        ESP_LOGI(TAG, "Nav Mode %d", fs);
+        ESP_LOGI(TAG, "Active Satellites");
+        for (int i=0; i<12; i++)
+            printf("%d ", s[i]);
+        printf("\n");
+        ESP_LOGI(TAG, "pdop=%f, hdop=%f, vdop=%f", pdop, hdop, vdop);
+    // Global positioning system fix data
+    } else if (!strncmp(line, "$GPGGA", 6)) {
+        double utc;
+        double lat;
+        char north;
+        double lon;
+        char east;
+        unsigned int qi;
+        unsigned int nbr;
+        float hdop;
+        float alt;
+        char uMsl;
+        float altref;
+        char uSep;
+        if (b) b=scan(b, utc);
+        if (b) b=scan(b, lat);
+        if (b) b=scan(b, north);
+        if (b) b=scan(b, lon);
+        if (b) b=scan(b, east);
+        if (b) b=scan(b, qi);
+        if (b) b=scan(b, nbr);
+        if (b) b=scan(b, hdop);
+        if (b) b=scan(b, alt);
+        if (b) b=scan(b, uMsl);
+        if (b) b=scan(b, altref);
+        if (b) b=scan(b, uSep);
+        ESP_LOGI(TAG, "utc=%lf, lat=%lf %c, long=%lf %c, quality=%u, "
+                "Satellites=%u, hdop=%f, alt=%f %c, ralt=%f %c",
+                utc, lat, north, lon, east, qi, nbr, hdop, alt, uMsl,
+                altref, uSep);
+
+    // GNSS Satellites in View
+    } else if (!strncmp(line, "$GPGSV", 6)) {
+        int nbr;
+        int idx;
+        int nosv;
+        if (b) b=scan(b, nbr);
+        if (b) b=scan(b, idx);
+        if (b) b=scan(b, nosv);
+
+        ESP_LOGI(TAG, "Message %u/%u. Satellites in view %u", nbr, idx, nosv);
+    }
+}
 
 void GPSTracker::gps() {
     /* Configure parameters of an UART driver,
@@ -145,7 +284,9 @@ void GPSTracker::gps() {
     // Configure a temporary buffer for the incoming data
     uint8_t *data = (uint8_t *) malloc(BUF_SIZE2);
 
+    char linebuf[BUF_SIZE2+1];
     char line[BUF_SIZE2+1];
+    linebuf[0]=0;
     line[0]=0;
     while (true) {
         // Read data from the UART
@@ -156,12 +297,27 @@ void GPSTracker::gps() {
         int len = uart_read_bytes(UART_NUM_1, data, BUF_SIZE2, 20 / portTICK_RATE_MS);
         if (len) {
             data[len]=0;
-            if (strlen(line)+strlen((char*)data)>BUF_SIZE2)
-                line[0]=0;
-            strcat(line, (char*)data);
+            if (strlen(linebuf)+strlen((char*)data)>BUF_SIZE2)
+                linebuf[0]=0;
+            strcat(linebuf, (char*)data);
             if (memchr(data, '\n', len)) {
-                printf("GPS: |%s|\n", line);
-                line[0]=0;
+                char* b=strtok(linebuf, "\n");
+                while (b) {
+                    if (strlen(line)) {
+                        process_gps(line);
+                    }
+                    strcpy(line, b);
+                    b=strtok(0, "\n");
+                }
+                linebuf[0]=0;
+                // Handle last line. Is it complete already?
+                if (strlen(line)) {
+                    if (linebuf[strlen(linebuf)-1]=='\n') {
+                        process_gps(line);
+                    } else {
+                        strcpy(linebuf, line);
+                    }
+                }
             }
         }
         delay(1);

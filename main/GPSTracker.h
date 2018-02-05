@@ -20,6 +20,12 @@ class GPSTracker {
 		void tick();
 		void init_wifi();
 		void wifi_scan();
+		char* scan(const char* line, char& c);
+		char* scan(const char* line, int& i);
+		char* scan(const char* line, float& f);
+		char* scan(const char* line, double& d);
+		char* scan(const char* line, unsigned int& u);
+		void process_gps(const char* line);
 
 		static void cb_task(void *parm);
 		static void cb_otatask(void *parm);
