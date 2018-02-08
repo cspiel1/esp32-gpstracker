@@ -261,6 +261,7 @@ void GPSTracker::process_nmea(const char* line) {
 //    printf("FREE %u\n", heap);
 }
 
+// See u-blox6_ReceiverDescriptionProtocolSpec_(GPS.G6-SW-10018).pdf
 void GPSTracker::process_ubx(uint8_t* data, int len) {
     ESP_LOGI(TAG, "%s", __PRETTY_FUNCTION__);
 
@@ -275,6 +276,7 @@ void GPSTracker::print_ubx(uint8_t* data, int len) {
     printf("\n");
 }
 
+// See u-blox6_ReceiverDescriptionProtocolSpec_(GPS.G6-SW-10018).pdf
 void GPSTracker::send_ubx(uint8_t cls, uint8_t id, const char* data, size_t len) {
     char* buf=new char[len+8];
     buf[0]=0xB5;
@@ -362,13 +364,16 @@ void GPSTracker::gps() {
                 }
                 cnt++;
                 if (cnt==10)  {
+                    // CFG-RXM (poll power mode)
                     ESP_LOGI(TAG, "UBX send");
                     send_ubx(0x06, 0x11, "", 0);
                 } else if (cnt==11) {
+                    // CFG-RXM (select Power Save Mode)
                     ESP_LOGI(TAG, "UBX send");
-                    char buf[2]={0x08, 0x04};
+                    char buf[2]={0x08, 0x01};
                     send_ubx(0x06, 0x11, buf, 2);
                 } else if (cnt==12) {
+                    // CFG-RXM (poll power mode)
                     ESP_LOGI(TAG, "UBX send");
                     send_ubx(0x06, 0x11, "", 0);
                 }
