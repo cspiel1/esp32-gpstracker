@@ -207,7 +207,7 @@ void OtaUpdate::run_ota() {
                 task_fatal_error();
             }
             binary_file_length += buff_len;
-            ESP_LOGI(TAG, "Have written image length %d", binary_file_length);
+//            ESP_LOGI(TAG, "Have written image length %d", binary_file_length);
         } else if (buff_len == 0) {  /*packet over*/
             flag = false;
             ESP_LOGI(TAG, "Connection closed, all packets received");

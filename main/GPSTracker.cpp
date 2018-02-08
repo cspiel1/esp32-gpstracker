@@ -9,6 +9,7 @@
 #include <soc/soc.h>
 #include <soc/rtc_cntl_reg.h>
 #include <esp_log.h>
+#include "esp_spiffs.h"
 #include <OtaUpdate.h>
 
 #undef swap
@@ -25,7 +26,8 @@
 #define SEALEVELPRESSURE_HPA 1013.25f
 
 GPSTracker::GPSTracker() : _display(0), _bmeok(false), _seaLevel(SEALEVELPRESSURE_HPA),
-    _run(false) {
+    _run(false), _satused(0), _alt(0), _uAlt(' '),
+    _satview(0), _latitude(0), _north(0), _longtitude(0), _east(0) {
     _seaLevel=SEALEVELPRESSURE_HPA;
 }
 
@@ -135,7 +137,7 @@ char* GPSTracker::scan(const char* line, char& c) {
     }
     c=line[0];
     char* r=strchr(line, ',');
-    r++;
+    if (r) r++;
     return r;
 }
 
@@ -146,7 +148,7 @@ char* GPSTracker::scan(const char* line, int& i) {
     }
     i=atoi(line);
     char* r=strchr(line, ',');
-    r++;
+    if (r) r++;
     return r;
 }
 
@@ -157,7 +159,7 @@ char* GPSTracker::scan(const char* line, float& f) {
     }
     f=atof(line);
     char* r=strchr(line, ',');
-    r++;
+    if (r) r++;
     return r;
 }
 
@@ -168,7 +170,7 @@ char* GPSTracker::scan(const char* line, double& d) {
     }
     d=atol(line);
     char* r=strchr(line, ',');
-    r++;
+    if (r) r++;
     return r;
 }
 
@@ -179,11 +181,11 @@ char* GPSTracker::scan(const char* line, unsigned int& u) {
     }
     u=(unsigned int) atoi(line);
     char* r=strchr(line, ',');
-    r++;
+    if (r) r++;
     return r;
 }
 
-void GPSTracker::process_gps(const char* line) {
+void GPSTracker::process_nmea(const char* line) {
     if (strlen(line)<=6) {
         ESP_LOGW(TAG, "GPS line is to short. |%s|", line);
         return;
@@ -224,45 +226,76 @@ void GPSTracker::process_gps(const char* line) {
     // Global positioning system fix data
     } else if (!strncmp(line, "$GPGGA", 6)) {
         double utc;
-        double lat;
-        char north;
-        double lon;
-        char east;
         unsigned int qi;
-        unsigned int nbr;
         float hdop;
-        float alt;
-        char uMsl;
         float altref;
         char uSep;
         if (b) b=scan(b, utc);
-        if (b) b=scan(b, lat);
-        if (b) b=scan(b, north);
-        if (b) b=scan(b, lon);
-        if (b) b=scan(b, east);
+        if (b) b=scan(b, _latitude);
+        if (b) b=scan(b, _north);
+        if (b) b=scan(b, _longtitude);
+        if (b) b=scan(b, _east);
         if (b) b=scan(b, qi);
-        if (b) b=scan(b, nbr);
+        if (b) b=scan(b, _satused);
         if (b) b=scan(b, hdop);
-        if (b) b=scan(b, alt);
-        if (b) b=scan(b, uMsl);
+        if (b) b=scan(b, _alt);
+        if (b) b=scan(b, _uAlt);
         if (b) b=scan(b, altref);
         if (b) b=scan(b, uSep);
         ESP_LOGI(TAG, "utc=%lf, lat=%lf %c, long=%lf %c, quality=%u, "
                 "Satellites=%u, hdop=%f, alt=%f %c, ralt=%f %c",
-                utc, lat, north, lon, east, qi, nbr, hdop, alt, uMsl,
-                altref, uSep);
+                utc, _latitude, _north, _longtitude, _east, qi, _satused,
+                hdop, _alt, _uAlt, altref, uSep);
 
     // GNSS Satellites in View
     } else if (!strncmp(line, "$GPGSV", 6)) {
         int nbr;
         int idx;
-        int nosv;
         if (b) b=scan(b, nbr);
         if (b) b=scan(b, idx);
-        if (b) b=scan(b, nosv);
+        if (b) b=scan(b, _satview);
 
-        ESP_LOGI(TAG, "Message %u/%u. Satellites in view %u", nbr, idx, nosv);
+        ESP_LOGI(TAG, "Message %u/%u. Satellites in view %u", nbr, idx, _satview);
     }
+//    uint32_t heap = esp_get_free_heap_size();
+//    printf("FREE %u\n", heap);
+}
+
+void GPSTracker::process_ubx(uint8_t* data, int len) {
+    ESP_LOGI(TAG, "%s", __PRETTY_FUNCTION__);
+
+    print_ubx(data, len);
+}
+
+void GPSTracker::print_ubx(uint8_t* data, int len) {
+    ESP_LOGI(TAG, "UBX data:");
+    for (int i=0; i<len; i++) {
+        printf("%02x ", data[i]);
+    }
+    printf("\n");
+}
+
+void GPSTracker::send_ubx(uint8_t cls, uint8_t id, const char* data, size_t len) {
+    char* buf=new char[len+8];
+    buf[0]=0xB5;
+    buf[1]=0x62;
+    buf[2]=cls;
+    buf[3]=id;
+    buf[4]=(uint8_t) len;
+    buf[5]=(uint8_t) (len >> 8);
+    memcpy(buf+6, data, len);
+
+    int a=0, b=0;
+    for(int i=2; i<len+6; i++) {
+        a = a + buf[i];
+        b = b + a;
+    }
+    buf[6+len]=a;
+    buf[7+len]=b;
+
+    print_ubx((uint8_t*) buf, len+8);
+
+    uart_write_bytes(UART_NUM_1, buf, len+8);
 }
 
 void GPSTracker::gps() {
@@ -288,6 +321,8 @@ void GPSTracker::gps() {
     char line[BUF_SIZE2+1];
     linebuf[0]=0;
     line[0]=0;
+
+    int cnt=0;
     while (true) {
         // Read data from the UART
         if (!_run) {
@@ -297,6 +332,13 @@ void GPSTracker::gps() {
         int len = uart_read_bytes(UART_NUM_1, data, BUF_SIZE2, 20 / portTICK_RATE_MS);
         if (len) {
             data[len]=0;
+            // UBX ?
+            if (data[0]==0xB5 && data[1]==0x62) {
+                process_ubx(data, len);
+                delay(1);
+                continue;
+            }
+            // Else ASCII NMEA
             if (strlen(linebuf)+strlen((char*)data)>BUF_SIZE2)
                 linebuf[0]=0;
             strcat(linebuf, (char*)data);
@@ -304,7 +346,7 @@ void GPSTracker::gps() {
                 char* b=strtok(linebuf, "\n");
                 while (b) {
                     if (strlen(line)) {
-                        process_gps(line);
+                        process_nmea(line);
                     }
                     strcpy(line, b);
                     b=strtok(0, "\n");
@@ -313,10 +355,22 @@ void GPSTracker::gps() {
                 // Handle last line. Is it complete already?
                 if (strlen(line)) {
                     if (linebuf[strlen(linebuf)-1]=='\n') {
-                        process_gps(line);
+                        process_nmea(line);
                     } else {
                         strcpy(linebuf, line);
                     }
+                }
+                cnt++;
+                if (cnt==10)  {
+                    ESP_LOGI(TAG, "UBX send");
+                    send_ubx(0x06, 0x11, "", 0);
+                } else if (cnt==11) {
+                    ESP_LOGI(TAG, "UBX send");
+                    char buf[2]={0x08, 0x04};
+                    send_ubx(0x06, 0x11, buf, 2);
+                } else if (cnt==12) {
+                    ESP_LOGI(TAG, "UBX send");
+                    send_ubx(0x06, 0x11, "", 0);
                 }
             }
         }
@@ -372,8 +426,9 @@ bool GPSTracker::start() {
     printf("%s this=%p\n", __FUNCTION__, this);
     _run=true;
 
-    xTaskCreate(&cb_uarttask, "UART Task", 8192, this, 5, NULL);
-    xTaskCreate(&cb_gpstask, "GPS Task", 8192, this, 5, NULL);
+    init_spiff();
+    init_gps();
+    init_uart();
 
     Wire.setBus(1);
     Wire.begin(SDA, SCL);
@@ -399,6 +454,45 @@ bool GPSTracker::init_bme280()  {
 }
 
 bool GPSTracker::init_gps()  {
+    return pdPASS==xTaskCreate(&cb_gpstask, "GPS Task", 8192, this, 5, NULL);
+}
+
+bool GPSTracker::init_uart()  {
+    return pdPASS==xTaskCreate(&cb_uarttask, "UART Task", 8192, this, 5, NULL);
+}
+
+bool GPSTracker::init_spiff() {
+    ESP_LOGI(TAG, "Initializing SPIFFS");
+
+    esp_vfs_spiffs_conf_t conf = {
+      .base_path = "/spiffs",
+      .partition_label = NULL,
+      .max_files = 5,
+      .format_if_mount_failed = true
+    };
+
+    // Use settings defined above to initialize and mount SPIFFS filesystem.
+    // Note: esp_vfs_spiffs_register is an all-in-one convenience function.
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Failed to find SPIFFS partition");
+        } else {
+            ESP_LOGE(TAG, "Failed to initialize SPIFFS (%d)", ret);
+        }
+        return false;
+    }
+
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(NULL, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information");
+    } else {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
     return true;
 }
 
@@ -413,7 +507,10 @@ void GPSTracker::display_altitude(float alt) {
     _display->println("Sming Framework");
     _display->println("");
     //----
-    _display->println(String("altitude = ") + alt + " m");
+    _display->println(String("alt = ") + alt + " m / " + _alt + " " + _uAlt);
+    _display->println(String("Satellites = ") + _satused + "/" + _satview);
+    _display->println(String("lat = ") + _latitude + _north);
+    _display->println(String("lon = ") + _longtitude + _east);
     _display->display();
 }
 

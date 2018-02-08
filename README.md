@@ -13,6 +13,7 @@ Features:
 - ssd1306 oled display (i2c)
 - serial input
 - ota http update
+- store GPS data on spiff
 - TODO: read and store GPS data
 - TODO: BLE for GPS data transfer to host
 
