@@ -136,6 +136,19 @@ char* GPSTracker::scan(const char* line, char& c) {
         return 0;
     }
     c=line[0];
+    if (c==',')
+        c=' ';
+    char* r=strchr(line, ',');
+    if (r) r++;
+    return r;
+}
+
+char* GPSTracker::scan(const char* line, uint8_t& i) {
+    if (!line) {
+        i=0;
+        return 0;
+    }
+    i=(uint8_t) atoi(line);
     char* r=strchr(line, ',');
     if (r) r++;
     return r;
@@ -183,6 +196,14 @@ char* GPSTracker::scan(const char* line, unsigned int& u) {
     char* r=strchr(line, ',');
     if (r) r++;
     return r;
+}
+
+void GPSTracker::flush_wps() {
+    std::vector<Waypoint*>::iterator it;
+    for (it=_wps.begin(); it!=_wps.end();) {
+        delete *it;
+        it=_wps.erase(it);
+    }
 }
 
 void GPSTracker::process_nmea(const char* line) {
@@ -246,6 +267,18 @@ void GPSTracker::process_nmea(const char* line) {
                 "Satellites=%u, hdop=%f, alt=%f %c, ralt=%f %c",
                 utc, _latitude, _north, _longtitude, _east, qi, _satused,
                 hdop, _alt, _uAlt, altref, uSep);
+        _wps.push_back(new Waypoint((uint32_t) utc*100, _satused, _alt, _satview,
+                    _latitude, _north, _longtitude, _east));
+
+        static int cntheap=0;
+        cntheap++;
+        if (cntheap % 5) {
+            uint32_t heap = esp_get_free_heap_size();
+            printf("FREE %u\n", heap);
+            if (heap<10000) {
+                flush_wps();
+            }
+        }
 
     // GNSS Satellites in View
     } else if (!strncmp(line, "$GPGSV", 6)) {
@@ -263,9 +296,48 @@ void GPSTracker::process_nmea(const char* line) {
 
 // See u-blox6_ReceiverDescriptionProtocolSpec_(GPS.G6-SW-10018).pdf
 void GPSTracker::process_ubx(uint8_t* data, int len) {
-    ESP_LOGI(TAG, "%s", __PRETTY_FUNCTION__);
+    ESP_LOGI(TAG, "%s len=%d", __PRETTY_FUNCTION__, len);
 
-    print_ubx(data, len);
+    uint8_t* a=(uint8_t*) memchr(data, 0xB5, len);
+    uint8_t* e=data+len;
+    while (a) {
+        int l=e-a-1;
+        uint8_t* b=(uint8_t*) memchr(a+1, 0xB5, l);
+        uint8_t* n;
+        if (b)
+            n=b;
+        else
+            n=e;
+
+        print_ubx(a, n-a);
+        a=b;
+    }
+
+    // if ACK-ACK
+    if (len>=8 && data[2]==0x05 && data[3]==0x01) {
+        if (data[6]==0x06 && data[7]==0x11) {
+            char buf[44]={
+                // reserved
+                0x01, 0x06, 0x00, 0x00,
+                // flags
+                0x00, 0x90, 0x02, 0x02,
+                // updatePeriod
+                0xb8, 0x0b, 0x00, 0x00,
+                // searchPeriod
+                0x10, 0x27, 0x00, 0x00,
+                // gridOffset
+                0x00, 0x00, 0x00, 0x00,
+                // ...
+                0x02, 0x00, 0x00, 0x00, 0x2c, 0x01, 0x00, 0x00, 0x4f, 0xc1,
+                0x03, 0x00, 0x86, 0x02, 0x00, 0x00, 0xfe, 0x00, 0x00, 0x00,
+                0x64, 0x40, 0x01, 0x00};
+            ESP_LOGI(TAG, "UBX send CFG-PM2 Set");
+            send_ubx(0x06, 0x3B, buf, 44);
+        } else if (data[6]==0x06 && data[7]==0x3B) {
+            ESP_LOGI(TAG, "UBX send CFG-PM2 Poll");
+            send_ubx(0x06, 0x3B, "", 0);
+        }
+    }
 }
 
 void GPSTracker::print_ubx(uint8_t* data, int len) {
@@ -324,7 +396,11 @@ void GPSTracker::gps() {
     linebuf[0]=0;
     line[0]=0;
 
-    int cnt=0;
+    // start config with UBX
+    ESP_LOGI(TAG, "UBX send CFG-RXM");
+    char buf[2]={0x08, 0x01};
+    send_ubx(0x06, 0x11, buf, 2);
+
     while (true) {
         // Read data from the UART
         if (!_run) {
@@ -361,21 +437,6 @@ void GPSTracker::gps() {
                     } else {
                         strcpy(linebuf, line);
                     }
-                }
-                cnt++;
-                if (cnt==10)  {
-                    // CFG-RXM (poll power mode)
-                    ESP_LOGI(TAG, "UBX send");
-                    send_ubx(0x06, 0x11, "", 0);
-                } else if (cnt==11) {
-                    // CFG-RXM (select Power Save Mode)
-                    ESP_LOGI(TAG, "UBX send");
-                    char buf[2]={0x08, 0x01};
-                    send_ubx(0x06, 0x11, buf, 2);
-                } else if (cnt==12) {
-                    // CFG-RXM (poll power mode)
-                    ESP_LOGI(TAG, "UBX send");
-                    send_ubx(0x06, 0x11, "", 0);
                 }
             }
         }
@@ -482,9 +543,9 @@ bool GPSTracker::init_spiff() {
 
     if (ret != ESP_OK) {
         if (ret == ESP_FAIL) {
-            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+            ESP_LOGE(TAG, "Failed to mount or format SPIFFS filesystem.");
         } else if (ret == ESP_ERR_NOT_FOUND) {
-            ESP_LOGE(TAG, "Failed to find SPIFFS partition");
+            ESP_LOGE(TAG, "Failed to find SPIFFS partition.");
         } else {
             ESP_LOGE(TAG, "Failed to initialize SPIFFS (%d)", ret);
         }
@@ -498,6 +559,16 @@ bool GPSTracker::init_spiff() {
     } else {
         ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
     }
+
+    ESP_LOGI(TAG, "Opening file");
+    FILE* f = fopen("/spiffs/hello.txt", "w");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for writing");
+        return false;
+    }
+    fprintf(f, "Hello World!\n");
+    fclose(f);
+    ESP_LOGI(TAG, "File written");
     return true;
 }
 

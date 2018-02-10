@@ -1,18 +1,20 @@
 #ifndef WAYPOINT_H
 #define WAYPOINT_H
+#include <stdint.h>
+
 class Waypoint {
 	public:
-		unsigned int _time;
-		unsigned char _satused;
+		uint32_t _time;
+		uint8_t _satused;
 		float _alt;
-		unsigned char _satview;
+		uint8_t _satview;
         double _latitude;
         char _north;
         double _longtitude;
         char _east;
 
-		Waypoint(unsigned int time, unsigned char satused, float alt,
-				unsigned char satview, double latitude, char north,
+		Waypoint(uint32_t time, uint8_t satused, float alt,
+				uint8_t satview, double latitude, char north,
 				double longtitude, char east);
 };
 

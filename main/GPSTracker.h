@@ -15,16 +15,17 @@ class GPSTracker {
 		bool _bmeok;
 		float _seaLevel;
 		bool _run;
-		int _satused;
+		uint8_t _satused;
 		float _alt;
 		char _uAlt;
-		int _satview;
+		uint8_t _satview;
         double _latitude;
         char _north;
         double _longtitude;
         char _east;
 
 		std::vector<Waypoint*> _wps;
+		void flush_wps();
 
 		bool init_display();
 		bool init_bme280();
@@ -38,6 +39,7 @@ class GPSTracker {
 		void wifi_scan();
 		char* scan(const char* line, char& c);
 		char* scan(const char* line, int& i);
+		char* scan(const char* line, uint8_t& i);
 		char* scan(const char* line, float& f);
 		char* scan(const char* line, double& d);
 		char* scan(const char* line, unsigned int& u);
