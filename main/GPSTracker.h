@@ -32,10 +32,13 @@ class GPSTracker {
 		bool init_gps();
 		bool init_uart();
 		bool init_spiff();
+		void init_nvs();
+		void init_wifi();
+		void init_ble();
+
 		void display_altitude(float alt);
 		void display_info(int row, const char* info);
 		void tick();
-		void init_wifi();
 		void wifi_scan();
 		char* scan(const char* line, char& c);
 		char* scan(const char* line, int& i);

@@ -1,4 +1,5 @@
 #include "GPSTracker.h"
+#include "GS_Location_and_Navigation.h"
 #include <Arduino.h>
 
 #include <freertos/FreeRTOS.h>
@@ -219,7 +220,7 @@ void GPSTracker::process_nmea(const char* line) {
     }
     // TODO: add crc check
 
-    ESP_LOGI(TAG, "Got: %s", line);
+//    ESP_LOGI(TAG, "Got: %s", line);
 
     // GNSS DOP and Active Satellites
     if (!strncmp(line, "$GPGSA", 6)) {
@@ -238,12 +239,12 @@ void GPSTracker::process_nmea(const char* line) {
         if (b) b=scan(b, pdop);
         if (b) b=scan(b, hdop);
         if (b) b=scan(b, vdop);
-        ESP_LOGI(TAG, "Nav Mode %d", fs);
-        ESP_LOGI(TAG, "Active Satellites");
-        for (int i=0; i<12; i++)
-            printf("%d ", s[i]);
-        printf("\n");
-        ESP_LOGI(TAG, "pdop=%f, hdop=%f, vdop=%f", pdop, hdop, vdop);
+//        ESP_LOGI(TAG, "Nav Mode %d", fs);
+//        ESP_LOGI(TAG, "Active Satellites");
+//        for (int i=0; i<12; i++)
+//            printf("%d ", s[i]);
+//        printf("\n");
+//        ESP_LOGI(TAG, "pdop=%f, hdop=%f, vdop=%f", pdop, hdop, vdop);
     // Global positioning system fix data
     } else if (!strncmp(line, "$GPGGA", 6)) {
         double utc;
@@ -263,16 +264,16 @@ void GPSTracker::process_nmea(const char* line) {
         if (b) b=scan(b, _uAlt);
         if (b) b=scan(b, altref);
         if (b) b=scan(b, uSep);
-        ESP_LOGI(TAG, "utc=%lf, lat=%lf %c, long=%lf %c, quality=%u, "
-                "Satellites=%u, hdop=%f, alt=%f %c, ralt=%f %c",
-                utc, _latitude, _north, _longtitude, _east, qi, _satused,
-                hdop, _alt, _uAlt, altref, uSep);
+//        ESP_LOGI(TAG, "utc=%lf, lat=%lf %c, long=%lf %c, quality=%u, "
+//                "Satellites=%u, hdop=%f, alt=%f %c, ralt=%f %c",
+//                utc, _latitude, _north, _longtitude, _east, qi, _satused,
+//                hdop, _alt, _uAlt, altref, uSep);
         _wps.push_back(new Waypoint((uint32_t) utc*100, _satused, _alt, _satview,
                     _latitude, _north, _longtitude, _east));
 
         static int cntheap=0;
         cntheap++;
-        if (cntheap % 5) {
+        if (cntheap % 20 == 0) {
             uint32_t heap = esp_get_free_heap_size();
             printf("FREE %u\n", heap);
             if (heap<10000) {
@@ -288,7 +289,7 @@ void GPSTracker::process_nmea(const char* line) {
         if (b) b=scan(b, idx);
         if (b) b=scan(b, _satview);
 
-        ESP_LOGI(TAG, "Message %u/%u. Satellites in view %u", nbr, idx, _satview);
+//        ESP_LOGI(TAG, "Message %u/%u. Satellites in view %u", nbr, idx, _satview);
     }
 //    uint32_t heap = esp_get_free_heap_size();
 //    printf("FREE %u\n", heap);
@@ -459,7 +460,15 @@ void GPSTracker::wifi_scan() {
     }
 }
 
-void GPSTracker::init_wifi() {
+void GPSTracker::init_ble() {
+    GattService* gs=new GS_Location_and_Navigation();
+    GattService::setInstance(gs);
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
+    gs->setup();
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 1); //disable brownout detector
+}
+
+void GPSTracker::init_nvs() {
     // Initialize NVS.
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
@@ -470,7 +479,9 @@ void GPSTracker::init_wifi() {
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK( err );
+}
 
+void GPSTracker::init_wifi() {
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
 //    WiFi.mode(WIFI_STA);
 //    WiFi.disconnect();
@@ -492,9 +503,11 @@ bool GPSTracker::start() {
     printf("%s this=%p\n", __FUNCTION__, this);
     _run=true;
 
+    init_nvs();
     init_spiff();
     init_gps();
     init_uart();
+    init_ble();
 
     Wire.setBus(1);
     Wire.begin(SDA, SCL);
@@ -601,7 +614,7 @@ void GPSTracker::display_info(int row, const char* info) {
 }
 
 void GPSTracker::tick() {
-    printf("tick\n");
+//    printf("tick\n");
     if (!_display) {
         init_display();
     } else if (!_bmeok) {
@@ -620,7 +633,7 @@ void GPSTracker::tick() {
         _seaLevel=SEALEVELPRESSURE_HPA;
     } else {
         float v=_bme.readAltitude(_seaLevel);
-        printf("h=%f _seaLevel=%f\n", v, _seaLevel);
+//        printf("h=%f _seaLevel=%f\n", v, _seaLevel);
         display_altitude(v);
     }
 }
