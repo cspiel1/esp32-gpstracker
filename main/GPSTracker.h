@@ -2,11 +2,13 @@
 #define GPS_TRACKER_H
 
 #include "Waypoint.h"
+
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_BME280.h>
 
 #undef swap
 #include <vector>
+#include "GS_Location_and_Navigation.h"
 
 class GPSTracker {
 	private:
@@ -23,6 +25,7 @@ class GPSTracker {
         char _north;
         double _longtitude;
         char _east;
+		GS_Location_and_Navigation* _gatt;
 
 		std::vector<Waypoint*> _wps;
 		void flush_wps();

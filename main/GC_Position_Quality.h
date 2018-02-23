@@ -8,7 +8,7 @@
 class GC_Position_Quality: public GattChar {
 
     public:
-    GC_Position_Quality();
+    GC_Position_Quality(esp_gatt_if_t gatt_if);
 
 };
 

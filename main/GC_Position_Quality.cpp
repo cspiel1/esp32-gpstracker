@@ -3,8 +3,9 @@
 
 #define TAG "Gatt"
 
-GC_Position_Quality::GC_Position_Quality():
-    GattChar({ESP_UUID_LEN_16, {GATTS_CHAR_UUID_Position_Quality}}) {
+GC_Position_Quality::GC_Position_Quality(esp_gatt_if_t gatt_if):
+    GattChar({ESP_UUID_LEN_16, {GATTS_CHAR_UUID_Position_Quality}},
+            gatt_if) {
     bzero(_uuid.uuid.uuid128+2, ESP_UUID_LEN_128-2);
     _property = ESP_GATT_CHAR_PROP_BIT_READ;
 

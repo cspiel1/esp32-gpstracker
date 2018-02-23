@@ -1,5 +1,4 @@
 #include "GPSTracker.h"
-#include "GS_Location_and_Navigation.h"
 #include <Arduino.h>
 
 #include <freertos/FreeRTOS.h>
@@ -28,7 +27,7 @@
 
 GPSTracker::GPSTracker() : _display(0), _bmeok(false), _seaLevel(SEALEVELPRESSURE_HPA),
     _run(false), _satused(0), _alt(0), _uAlt(' '),
-    _satview(0), _latitude(0), _north(0), _longtitude(0), _east(0) {
+    _satview(0), _latitude(0), _north(0), _longtitude(0), _east(0), _gatt(0) {
     _seaLevel=SEALEVELPRESSURE_HPA;
 }
 
@@ -268,8 +267,11 @@ void GPSTracker::process_nmea(const char* line) {
 //                "Satellites=%u, hdop=%f, alt=%f %c, ralt=%f %c",
 //                utc, _latitude, _north, _longtitude, _east, qi, _satused,
 //                hdop, _alt, _uAlt, altref, uSep);
-        _wps.push_back(new Waypoint((uint32_t) utc*100, _satused, _alt, _satview,
-                    _latitude, _north, _longtitude, _east));
+        Waypoint* wp=new Waypoint((uint32_t) utc*100, _satused, _alt, _satview,
+                    _latitude, _north, _longtitude, _east);
+        _wps.push_back(wp);
+        if (_gatt)
+            _gatt->reportWaypoint(wp);
 
         static int cntheap=0;
         cntheap++;
@@ -290,6 +292,19 @@ void GPSTracker::process_nmea(const char* line) {
         if (b) b=scan(b, _satview);
 
 //        ESP_LOGI(TAG, "Message %u/%u. Satellites in view %u", nbr, idx, _satview);
+    } else if (!strncmp(line, "$GPZDA", 6)) {
+        double utc;
+        uint8_t dd;
+        uint8_t mm;
+        int yyyy;
+        if (b) b=scan(b, utc);
+        if (b) b=scan(b, dd);
+        if (b) b=scan(b, mm);
+        if (b) b=scan(b, yyyy);
+
+        if (_gatt)
+            _gatt->setDate(yyyy, mm, dd);
+        ESP_LOGI(TAG, "Time and Date %lf, %u, %u, %d", utc, dd, mm, yyyy);
     }
 //    uint32_t heap = esp_get_free_heap_size();
 //    printf("FREE %u\n", heap);
@@ -461,10 +476,10 @@ void GPSTracker::wifi_scan() {
 }
 
 void GPSTracker::init_ble() {
-    GattService* gs=new GS_Location_and_Navigation();
-    GattService::setInstance(gs);
+    _gatt=new GS_Location_and_Navigation();
+    GattService::setInstance(_gatt);
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
-    gs->setup();
+    _gatt->setup();
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 1); //disable brownout detector
 }
 

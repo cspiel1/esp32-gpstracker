@@ -28,9 +28,12 @@ class GattChar {
     protected:
     GattDescriptor* _descriptor;
     GattData _value;
+    uint16_t _conn_id;
+    bool _connected;
+    esp_gatt_if_t _gatt_if;
 
     public:
-    GattChar(esp_bt_uuid_t uuid);
+    GattChar(esp_bt_uuid_t uuid, esp_gatt_if_t gatt_if);
 
     uint16_t _handle;
     esp_bt_uuid_t _uuid;
@@ -38,6 +41,10 @@ class GattChar {
     GattDescriptor* descriptor();
 
     GattData* value();
+
+    void set_conn_id(uint16_t id);
+    void disconnected();
+    void notify();
 };
 
 #endif

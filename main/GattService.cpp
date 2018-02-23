@@ -14,7 +14,7 @@
 
 #define GATTS_DEVICE_NAME       "CSPIEL_GPSTRACKER"
 #define GATTS_SERVICE_UUID      0x00FF
-#define GATTS_NUM_HANDLE        4
+#define GATTS_NUM_HANDLE        8
 
 #define PROFILE_APP_ID 0
 
@@ -130,7 +130,7 @@ void GattService::process_gap_event(esp_gap_ble_cb_event_t event,
     }
 }
 
-void GattService::write_event_env(esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param){
+void GattService::write_event_env(esp_gatt_if_t gatt_if, esp_ble_gatts_cb_param_t *param){
     esp_gatt_status_t status = ESP_GATT_OK;
     if (param->write.need_rsp){
         if (param->write.is_prep){
@@ -140,7 +140,7 @@ void GattService::write_event_env(esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param
             gatt_rsp->attr_value.offset = param->write.offset;
             gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
             memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
-            esp_err_t response_err = esp_ble_gatts_send_response(gatts_if,
+            esp_err_t response_err = esp_ble_gatts_send_response(gatt_if,
                     param->write.conn_id, param->write.trans_id, status, gatt_rsp);
             if (response_err != ESP_OK){
                ESP_LOGE(TAG, "Send response error\n");
@@ -152,7 +152,7 @@ void GattService::write_event_env(esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param
             _writebuf.append(param->write.value, param->write.len);
 
         }else{
-            esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
+            esp_ble_gatts_send_response(gatt_if, param->write.conn_id, param->write.trans_id, status, NULL);
         }
     }
 }
@@ -170,15 +170,16 @@ void GattService::exec_write_event_env(esp_ble_gatts_cb_param_t *param){
 
 void GattService::gatts_event_handler(
         esp_gatts_cb_event_t event,
-        esp_gatt_if_t gatts_if,
+        esp_gatt_if_t gatt_if,
         esp_ble_gatts_cb_param_t *param) {
 
     if (!_instance) return;
-    _instance->process_gatt_event(event, gatts_if, param);
+    _instance->process_gatt_event(event, gatt_if, param);
 }
 
 GattService::GattService(esp_bt_uuid_t uuid) {
     _adv_config_done=0;
+    _gatt_if=0;
     // Prepare _service_uuid, adv_data and scan_rsp_data.
     memcpy(_service_uuid, service_uuid_def, sizeof(service_uuid_def));
     int len=uuid.len;
@@ -201,12 +202,13 @@ void GattService::setInstance(GattService* instance) {
 
 void GattService::process_gatt_event(
         esp_gatts_cb_event_t event,
-        esp_gatt_if_t gatts_if,
+        esp_gatt_if_t gatt_if,
         esp_ble_gatts_cb_param_t *param) {
 
     if (event == ESP_GATTS_REG_EVT) {
         if (param->reg.status == ESP_GATT_OK) {
-            _gatts_if = gatts_if;
+            _gatt_if = gatt_if;
+            makeGattChars();
         } else {
             ESP_LOGI(TAG, "Reg app failed, app_id %04x, status %d\n",
                     param->reg.app_id,
@@ -215,7 +217,7 @@ void GattService::process_gatt_event(
         }
     }
 
-    if ((_gatts_if!=ESP_GATT_IF_NONE) && (_gatts_if!=gatts_if))
+    if ((_gatt_if!=ESP_GATT_IF_NONE) && (_gatt_if!=gatt_if))
         return;
 
     switch (event) {
@@ -244,7 +246,7 @@ void GattService::process_gatt_event(
         }
         _adv_config_done |= scan_rsp_config_flag;
 
-        esp_ble_gatts_create_service(gatts_if, &_service_id, GATTS_NUM_HANDLE);
+        esp_ble_gatts_create_service(gatt_if, &_service_id, GATTS_NUM_HANDLE);
         break;
     }
     case ESP_GATTS_READ_EVT: {
@@ -258,7 +260,7 @@ void GattService::process_gatt_event(
             rsp.attr_value.handle = param->read.handle;
             rsp.attr_value.len = d->len;
             memcpy(rsp.attr_value.value, d->data, d->len);
-            esp_ble_gatts_send_response(gatts_if, param->read.conn_id,
+            esp_ble_gatts_send_response(gatt_if, param->read.conn_id,
                     param->read.trans_id, ESP_GATT_OK, &rsp);
         }
         break;
@@ -277,14 +279,14 @@ void GattService::process_gatt_event(
                     if (gc->_property & ESP_GATT_CHAR_PROP_BIT_NOTIFY) {
                         ESP_LOGI(TAG, "notify enable");
                         GattData* d=gc->value();
-                        esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,
+                        esp_ble_gatts_send_indicate(gatt_if, param->write.conn_id,
                                 gc->_handle, d->len, d->data, false);
                     }
                 }else if (descr_value == 0x0002) {
                     if (gc->_property & ESP_GATT_CHAR_PROP_BIT_INDICATE){
                         GattData* d=gc->value();
                         ESP_LOGI(TAG, "indicate enable");
-                        esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,
+                        esp_ble_gatts_send_indicate(gatt_if, param->write.conn_id,
                                 gc->_handle, d->len, d->data, true);
                     }
                 }
@@ -296,12 +298,12 @@ void GattService::process_gatt_event(
                 }
             }
         }
-        write_event_env(gatts_if, param);
+        write_event_env(gatt_if, param);
         break;
     }
     case ESP_GATTS_EXEC_WRITE_EVT:
         ESP_LOGI(TAG,"ESP_GATTS_EXEC_WRITE_EVT");
-        esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, NULL);
+        esp_ble_gatts_send_response(gatt_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, NULL);
         exec_write_event_env(param);
         break;
     case ESP_GATTS_MTU_EVT:
@@ -395,13 +397,20 @@ void GattService::process_gatt_event(
          param->connect.remote_bda[3], param->connect.remote_bda[4],
          param->connect.remote_bda[5]);
         _conn_id = param->connect.conn_id;
+        std::list<GattChar*>::iterator it;
+        for (it=_char_list.begin(); it!=_char_list.end(); it++)
+            (*it)->set_conn_id(_conn_id);
         //start sent the update connection parameters to the peer device.
         esp_ble_gap_update_conn_params(&conn_params);
         break;
     }
-    case ESP_GATTS_DISCONNECT_EVT:
+    case ESP_GATTS_DISCONNECT_EVT: {
         ESP_LOGI(TAG, "ESP_GATTS_DISCONNECT_EVT");
+        std::list<GattChar*>::iterator it;
+        for (it=_char_list.begin(); it!=_char_list.end(); it++)
+            (*it)->set_conn_id(0);
         esp_ble_gap_start_advertising(&adv_params);
+        }
         break;
     case ESP_GATTS_CONF_EVT:
         ESP_LOGI(TAG, "ESP_GATTS_CONF_EVT, status %d", param->conf.status);
@@ -420,9 +429,6 @@ void GattService::process_gatt_event(
 }
 
 void GattService::setup() {
-    // generate gatt charateristics
-    makeGattChars();
-
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();

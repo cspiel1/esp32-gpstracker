@@ -2,14 +2,19 @@
 
 #define TAG "Gatt"
 #include <esp_log.h>
+#include <esp_gatt_defs.h>
+#include <esp_gatts_api.h>
 #include <stdlib.h>
 #include <string.h>
 
-GattChar::GattChar(esp_bt_uuid_t uuid) {
+GattChar::GattChar(esp_bt_uuid_t uuid, esp_gatt_if_t gatt_if) {
     _uuid=uuid;
     _handle=0;
     _property=0;
     _descriptor=0;
+    _conn_id=0;
+    _gatt_if=gatt_if;
+    _connected=false;
 }
 
 GattDescriptor* GattChar::descriptor() {
@@ -69,4 +74,26 @@ void GattData::append_u16(uint16_t v) {
 
 void GattData::append_i32(int32_t v) {
     append((uint8_t*)&v, sizeof(v));
+}
+
+void GattChar::set_conn_id(uint16_t id) {
+    _conn_id=id;
+    _connected=true;
+}
+
+void GattChar::disconnected() {
+    _connected=false;
+}
+
+void GattChar::notify() {
+    if (!_connected) return;
+    if (_gatt_if<1) {
+        ESP_LOGW(TAG, "_gatt_if=%d is out of range.", _gatt_if);
+        return;
+    }
+
+    GattData* d=value();
+    ESP_LOGI(TAG, "notify data %d bytes", d->len)
+    esp_ble_gatts_send_indicate(_gatt_if, _conn_id,
+            _handle, d->len, d->data, false);
 }

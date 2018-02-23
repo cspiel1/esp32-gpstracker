@@ -10,7 +10,7 @@
 class GattService {
 	static void gatts_event_handler(
 			esp_gatts_cb_event_t event,
-			esp_gatt_if_t gatts_if,
+			esp_gatt_if_t gatt_if,
 			esp_ble_gatts_cb_param_t *param);
 
 	static void gap_event_handler(
@@ -19,7 +19,7 @@ class GattService {
 
 	void process_gatt_event(
 			esp_gatts_cb_event_t event,
-			esp_gatt_if_t gatts_if,
+			esp_gatt_if_t gatt_if,
 			esp_ble_gatts_cb_param_t *param);
 
 	void process_gap_event(
@@ -27,7 +27,6 @@ class GattService {
 			esp_ble_gap_cb_param_t *param);
 
     esp_gatt_srvc_id_t _service_id;
-    uint16_t _gatts_if;
     uint16_t _app_id;
     uint16_t _conn_id;
     uint16_t _service_handle;
@@ -46,11 +45,12 @@ class GattService {
 	esp_ble_adv_data_t scan_rsp_data;
 
 	GattData _writebuf;
-	void write_event_env(esp_gatt_if_t gatts_if,
+	void write_event_env(esp_gatt_if_t gatt_if,
 			esp_ble_gatts_cb_param_t *param);
 	void exec_write_event_env(esp_ble_gatts_cb_param_t *param);
 
 	protected:
+    uint16_t _gatt_if;
 	GattService(esp_bt_uuid_t uuid);
 	std::list<GattChar*> _char_list;
 

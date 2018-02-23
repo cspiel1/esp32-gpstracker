@@ -10,7 +10,9 @@ class GC_Location_and_Speed: public GattChar {
 
     uint16_t _descr_val;
     public:
-    GC_Location_and_Speed();
+    GC_Location_and_Speed(esp_gatt_if_t gatt_if);
+
+    void notify(int32_t lat, int32_t lon, uint64_t utc);
 };
 
 #endif

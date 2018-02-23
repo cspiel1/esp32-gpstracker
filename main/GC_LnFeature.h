@@ -9,7 +9,7 @@
 class GC_LnFeature: public GattChar {
 
     public:
-    GC_LnFeature();
+    GC_LnFeature(esp_gatt_if_t gatt_if);
 
 };
 
