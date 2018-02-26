@@ -31,12 +31,12 @@ GattData::GattData(): data(0), len(0) {
 }
 
 GattData::~GattData() {
-    clear();
+    free(data);
+    _memlen=0;
+    len=0;
 }
 
 void GattData::clear() {
-    free(data);
-    _memlen=0;
     len=0;
 }
 
@@ -49,7 +49,6 @@ void GattData::store(uint8_t* data, int len) {
         ESP_LOGE(TAG, "ERR - alloc error.");
         return;
     }
-    _memlen=len;
     memcpy(this->data, data, len);
     this->len=len;
 }
@@ -65,15 +64,19 @@ void GattData::append(uint8_t* data, int len) {
 }
 
 void GattData::append(uint8_t v) {
-    append(&v, sizeof(v));
+    append(&v, 1);
 }
 
 void GattData::append_u16(uint16_t v) {
-    append((uint8_t*)&v, sizeof(v));
+    append(uint8_t(v));
+    append(uint8_t(v >> 8));
 }
 
 void GattData::append_i32(int32_t v) {
-    append((uint8_t*)&v, sizeof(v));
+    append(uint8_t(v));
+    append(uint8_t(v >> 8));
+    append(uint8_t(v >> 16));
+    append(uint8_t(v >> 24));
 }
 
 void GattChar::set_conn_id(uint16_t id) {
@@ -93,7 +96,13 @@ void GattChar::notify() {
     }
 
     GattData* d=value();
-    ESP_LOGI(TAG, "notify data %d bytes", d->len)
-    esp_ble_gatts_send_indicate(_gatt_if, _conn_id,
-            _handle, d->len, d->data, false);
+    ESP_LOGI(TAG, "%s notify data %d bytes", __PRETTY_FUNCTION__, d->len)
+//    uint8_t notify_data[15];
+//    for (int i = 0; i < (uint8_t) sizeof(notify_data); ++i) {
+//        notify_data[i] = i % 0xff;
+//    }
+//    esp_ble_gatts_send_indicate(_gatt_if, _conn_id, _handle,
+//            sizeof(notify_data), notify_data, false);
+    esp_ble_gatts_send_indicate(_gatt_if, _conn_id, _handle,
+            d->len, d->data, false);
 }

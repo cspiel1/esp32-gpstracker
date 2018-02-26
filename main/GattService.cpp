@@ -408,7 +408,7 @@ void GattService::process_gatt_event(
         ESP_LOGI(TAG, "ESP_GATTS_DISCONNECT_EVT");
         std::list<GattChar*>::iterator it;
         for (it=_char_list.begin(); it!=_char_list.end(); it++)
-            (*it)->set_conn_id(0);
+            (*it)->disconnected();
         esp_ble_gap_start_advertising(&adv_params);
         }
         break;

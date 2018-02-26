@@ -208,13 +208,13 @@ void GPSTracker::flush_wps() {
 
 void GPSTracker::process_nmea(const char* line) {
     if (strlen(line)<=6) {
-        ESP_LOGW(TAG, "GPS line is to short. |%s|", line);
+        ESP_LOGW(TAG, "GPS line is to short.");
         return;
     }
     const char* b=line+7;
     char* e=strchr(line, '*');
     if (!e) {
-        ESP_LOGW(TAG, "GPS line: No * found. |%s|", line);
+        ESP_LOGW(TAG, "GPS line: No * found.");
         return;
     }
     // TODO: add crc check

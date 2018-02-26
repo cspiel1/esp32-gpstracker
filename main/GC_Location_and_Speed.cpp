@@ -26,6 +26,7 @@ void GC_Location_and_Speed::notify(int32_t lat, int32_t lon, uint64_t utc) {
     uint8_t mi = (utc & 0x0000000000ff0000) >> (2*8);
     uint8_t ss = (utc & 0x000000000000ff00) >> (1*8);
 
+    _value.clear();
     _value.append_u16(flags);
     _value.append_i32(lat);
     _value.append_i32(lon);
