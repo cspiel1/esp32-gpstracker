@@ -476,7 +476,7 @@ void GPSTracker::wifi_scan() {
 }
 
 void GPSTracker::init_ble() {
-    _gatt=new GS_Location_and_Navigation();
+    _gatt=new GS_Location_and_Navigation("cspiel-gpstracker");
     GattService::setInstance(_gatt);
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
     _gatt->setup();

@@ -1,7 +1,7 @@
 #include "GS_Location_and_Navigation.h"
 
-GS_Location_and_Navigation::GS_Location_and_Navigation():
-    GattService({ESP_UUID_LEN_16, {GS_UUID_Location_and_Navigation}}) {
+GS_Location_and_Navigation::GS_Location_and_Navigation(const char* name):
+    GattService({ESP_UUID_LEN_16, {GS_UUID_Location_and_Navigation}}, name) {
 
     GattService::setInstance(this);
 }

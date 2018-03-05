@@ -21,7 +21,7 @@ class GS_Location_and_Navigation: public GattService {
 		uint8_t _day;
 
 	public:
-		GS_Location_and_Navigation();
+		GS_Location_and_Navigation(const char* name);
 		void reportWaypoint(Waypoint* wp);
 		void setDate(uint16_t year, uint8_t month, uint8_t day);
 };

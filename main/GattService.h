@@ -49,9 +49,11 @@ class GattService {
 			esp_ble_gatts_cb_param_t *param);
 	void exec_write_event_env(esp_ble_gatts_cb_param_t *param);
 
+	const char* _name;
+
 	protected:
     uint16_t _gatt_if;
-	GattService(esp_bt_uuid_t uuid);
+	GattService(esp_bt_uuid_t uuid, const char* name);
 	std::list<GattChar*> _char_list;
 
 	public:

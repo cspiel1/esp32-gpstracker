@@ -12,10 +12,6 @@
 
 #define TAG "Gatt"
 
-#define GATTS_DEVICE_NAME       "CSPIEL_GPSTRACKER"
-#define GATTS_SERVICE_UUID      0x00FF
-#define GATTS_NUM_HANDLE        8
-
 #define PROFILE_APP_ID 0
 
 #define adv_config_flag      (1 << 0)
@@ -25,7 +21,7 @@ static uint8_t service_uuid_def[16] = {
     /* LSB <--------------------------------------------------------------------------------> MSB */
     //16bit, [12],[13] is the value
     //32bit, [12],[13],[14],[15] is the value
-    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
 // The length of adv data must be less than 31 bytes
@@ -86,6 +82,7 @@ void GattService::gap_event_handler(
 void GattService::process_gap_event(esp_gap_ble_cb_event_t event,
         esp_ble_gap_cb_param_t *param) {
 
+    ESP_LOGI(TAG, "%s BEGIN event=%d\n", __FUNCTION__, event);
     switch (event) {
     case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
         _adv_config_done &= (~adv_config_flag);
@@ -177,7 +174,8 @@ void GattService::gatts_event_handler(
     _instance->process_gatt_event(event, gatt_if, param);
 }
 
-GattService::GattService(esp_bt_uuid_t uuid) {
+GattService::GattService(esp_bt_uuid_t uuid, const char* name) {
+    _name=name;
     _adv_config_done=0;
     _gatt_if=0;
     // Prepare _service_uuid, adv_data and scan_rsp_data.
@@ -186,6 +184,8 @@ GattService::GattService(esp_bt_uuid_t uuid) {
     if (len>4)
         len=4;
     memcpy(_service_uuid+12, &uuid.uuid.uuid16, len);
+    ESP_LOGI(TAG, "_service_uuid=");
+    esp_log_buffer_hex(TAG, _service_uuid, 16);
 
     memcpy(&adv_data, &adv_data_def, sizeof(esp_ble_adv_data_t));
     adv_data.p_service_uuid=_service_uuid;
@@ -226,10 +226,10 @@ void GattService::process_gatt_event(
                 param->reg.status, param->reg.app_id);
         _service_id.is_primary = true;
         _service_id.id.inst_id = 0x00;
-        _service_id.id.uuid.len = ESP_UUID_LEN_16;
-        _service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID;
+        _service_id.id.uuid.len = 16;
+        _service_id.id.uuid.uuid.uuid16 = _service_uuid[12] | (_service_uuid[13]<<8);
 
-        esp_err_t ret = esp_ble_gap_set_device_name(GATTS_DEVICE_NAME);
+        esp_err_t ret = esp_ble_gap_set_device_name(_name);
         if (ret){
             ESP_LOGE(TAG, "set device name failed, error code = %x", ret);
         }
@@ -246,7 +246,7 @@ void GattService::process_gatt_event(
         }
         _adv_config_done |= scan_rsp_config_flag;
 
-        esp_ble_gatts_create_service(gatt_if, &_service_id, GATTS_NUM_HANDLE);
+        esp_ble_gatts_create_service(gatt_if, &_service_id, _char_list.size()*2+2);
         break;
     }
     case ESP_GATTS_READ_EVT: {
@@ -409,6 +409,7 @@ void GattService::process_gatt_event(
         std::list<GattChar*>::iterator it;
         for (it=_char_list.begin(); it!=_char_list.end(); it++)
             (*it)->disconnected();
+        ESP_LOGI(TAG, "Starting gap. Line=%d\n", __LINE__);
         esp_ble_gap_start_advertising(&adv_params);
         }
         break;
